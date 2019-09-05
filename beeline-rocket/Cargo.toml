@@ -1,0 +1,30 @@
+[package]
+name = "beeline-rocket"
+version = "0.1.0"
+authors = ["Norberto Lopes <nlopes.ml@gmail.com>"]
+edition = "2018"
+description = "Rocket middleware to send metrics to Honeycomb"
+documentation = "https://docs.rs/beeline/0.1.0/beeline-rocket"
+repository = "https://github.com/nlopes/beeline-rust.git"
+keywords = ["rocket", "middleware", "honeycomb", "web"]
+categories = ["web-programming"]
+license = "MIT"
+readme = "README.md"
+exclude = [".gitignore", ".travis.yml"]
+
+[lib]
+name = "beeline_rocket"
+path = "src/lib.rs"
+
+[badges]
+travis-ci = { repository = "nlopes/beeline-rust", branch = "master" }
+
+[dependencies]
+rocket = "0.4.2"
+beeline-rust = { path = "../beeline" }
+serde_json = "=1.0.40"
+
+[dev-dependencies]
+hostname = "=0.1.5"
+libhoney-rust = {path="../../libhoney-rust"}
+mockito = "=0.20.0"

@@ -1,0 +1,32 @@
+[package]
+name = "beeline-actix-web"
+version = "0.1.0"
+authors = ["Norberto Lopes <nlopes.ml@gmail.com>"]
+edition = "2018"
+description = "Actix-web middleware to send metrics to Honeycomb"
+documentation = "https://docs.rs/beeline/0.1.0/beeline-actix-web"
+repository = "https://github.com/nlopes/beeline-rust.git"
+keywords = ["actix", "actix-web", "middleware", "honeycomb", "web"]
+categories = ["web-programming"]
+license = "MIT"
+readme = "README.md"
+exclude = [".gitignore", ".travis.yml"]
+
+[lib]
+name = "beeline_actix_web"
+
+[badges]
+travis-ci = { repository = "nlopes/beeline-rust", branch = "master" }
+
+[dependencies]
+actix-service = "0.4"
+actix-web = "1.0.0"
+beeline-rust = { path = "../beeline" }
+futures = "0.1"
+parking_lot = "0.9"
+serde_json = "=1.0.40"
+
+[dev-dependencies]
+hostname = "=0.1.5"
+libhoney-rust = {path="../../libhoney-rust"}
+mockito = "=0.20.0"

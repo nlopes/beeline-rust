@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "beeline",
+  "beeline-actix-web",
+  "beeline-rocket",
+]
