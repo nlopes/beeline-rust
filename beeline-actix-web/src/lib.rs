@@ -1,12 +1,13 @@
 /*! Honeycomb support for actix-web.
 
-By default, the following items are added to the trace:
- - meta.type (always "http_request")
- - request.method
- - request.path
- - request.header.<name> (name is the same as the original header name but with dashes replaced with underscores)
- - response.status
- - response.body.size
+By default, the following fields are added to the trace:
+ - `meta.type` (always "http_request")
+ - `request.method`
+ - `request.path`
+ - `request.header.<name>` (name is the same as the original header name but with dashes replaced with underscores)
+   - example: `request.header.content_type`
+ - `response.status`
+ - `response.body.size`
 
 # Usage
 
@@ -30,13 +31,13 @@ fn health() -> HttpResponse {
 fn main() -> std::io::Result<()> {
     let beeline = BeelineMiddleware::new_with_client(_client_);
     # if false {
-        HttpServer::new(move || {
-            App::new()
-                .wrap(beeline.clone())
-                .service(web::resource("/health").to(health))
-        })
-        .bind("127.0.0.1:8080")?
-        .run();
+    HttpServer::new(move || {
+        App::new()
+            .wrap(beeline.clone())
+            .service(web::resource("/health").to(health))
+    })
+    .bind("127.0.0.1:8080")?
+    .run();
     # }
     Ok(())
 }
@@ -45,7 +46,6 @@ fn main() -> std::io::Result<()> {
  */
 
 #![deny(missing_docs)]
-//#![feature(associated_type_bounds)]
 
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -58,7 +58,7 @@ use actix_web::{
     web::Bytes,
     Error,
 };
-use beeline::{SafeTrace, Sender};
+use beeline::{Client, SafeTrace, Sender};
 use futures::future::{ok, FutureResult};
 use futures::{Async, Future, Poll};
 use serde_json::json;
@@ -70,7 +70,7 @@ pub struct BeelineMiddleware<T>
 where
     T: Sender + Clone,
 {
-    client: beeline::Client<T>,
+    client: Client<T>,
     trace: SafeTrace,
 }
 
@@ -86,10 +86,10 @@ impl<T: Sender + Clone> BeelineMiddleware<T> {
     // }
 
     /// Build with already started client
-    pub fn new_with_client(client: beeline::Client<T>) -> Self {
+    pub fn new_with_client(client: Client<T>) -> Self {
         let trace = client.new_trace(None);
         Self {
-            client: client,
+            client,
             trace: trace.clone(),
         }
     }
@@ -135,11 +135,11 @@ where
     type Response = ServiceResponse<StreamLog<B, T>>;
     type Error = Error;
     type InitError = ();
-    type Transform = BeelineInnerMiddleware<S, T>;
+    type Transform = BeelineService<S, T>;
     type Future = FutureResult<Self::Transform, Self::InitError>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ok(BeelineInnerMiddleware {
+        ok(BeelineService {
             service,
             inner: Arc::new(self.clone()),
         })
@@ -148,12 +148,12 @@ where
 
 #[doc(hidden)]
 /// Middleware service for BeelineMiddleware
-pub struct BeelineInnerMiddleware<S, T: Sender + Clone> {
+pub struct BeelineService<S, T: Sender + Clone> {
     service: S,
     inner: Arc<BeelineMiddleware<T>>,
 }
 
-impl<T, S, B> Service for BeelineInnerMiddleware<S, T>
+impl<T, S, B> Service for BeelineService<S, T>
 where
     S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -280,7 +280,7 @@ impl<B: MessageBody, T: Sender + Clone> MessageBody for StreamLog<B, T> {
 
 #[cfg(test)]
 mod tests {
-    use actix_web::test::{call_service, init_service, read_body, read_response, TestRequest};
+    use actix_web::test::{call_service, init_service, TestRequest};
     use actix_web::{web, App, HttpResponse};
     use beeline::{Client, Config};
     use libhoney::mock::TransmissionMock;
