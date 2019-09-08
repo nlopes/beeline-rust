@@ -280,7 +280,7 @@ impl<B: MessageBody, T: Sender + Clone> MessageBody for StreamLog<B, T> {
 
 #[cfg(test)]
 mod tests {
-    use actix_web::test::{call_service, init_service, TestRequest};
+    use actix_web::test::{call_service, init_service, read_body, TestRequest};
     use actix_web::{web, App, HttpResponse};
     use beeline::{Client, Config};
     use libhoney::mock::TransmissionMock;
@@ -308,7 +308,7 @@ mod tests {
                 },
                 transmission_options: libhoney::transmission::Options::default(),
             },
-            service_name: Some("beeline-rust-test".to_string()),
+            service_name: Some("beeline-actix-web-test".to_string()),
         };
 
         beeline::test::init(config)

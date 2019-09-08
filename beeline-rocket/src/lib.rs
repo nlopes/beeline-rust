@@ -123,7 +123,7 @@ mod tests {
                 },
                 transmission_options: libhoney::transmission::Options::default(),
             },
-            service_name: Some("beeline-rust-test".to_string()),
+            service_name: Some("beeline-rocket-test".to_string()),
         };
 
         beeline::test::init(config)
