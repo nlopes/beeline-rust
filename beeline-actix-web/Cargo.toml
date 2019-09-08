@@ -20,8 +20,8 @@ travis-ci = { repository = "nlopes/beeline-rust", branch = "master" }
 
 [dependencies]
 actix-service = "0.4"
-actix-web = "1.0.0"
-beeline-rust = { path = "../beeline" }
+actix-web = "=1.0.7"
+beeline-rust = { path = "../" }
 futures = "0.1"
 parking_lot = "0.9"
 serde_json = "=1.0.40"

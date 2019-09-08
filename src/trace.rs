@@ -254,7 +254,7 @@ impl Span {
             }
         } else if self.is_async {
             "async"
-        } else if self.children.len() == 0 {
+        } else if self.children.is_empty() {
             "leaf"
         } else {
             "mid"

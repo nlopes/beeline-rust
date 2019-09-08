@@ -1,14 +1,12 @@
-/*!
-Honeycomb support for actix-web.
+/*! Honeycomb support for actix-web.
 
-By default two metrics are tracked (this assumes the namespace `actix_web_prom`):
-
-  - `actix_web_prom_http_requests_total` (labels: endpoint, method, status): the total number
-   of HTTP requests handled by the actix HttpServer.
-
-  - `actix_web_prom_http_requests_duration_seconds` (labels: endpoint, method, status): the
-   request duration for all HTTP requests handled by the actix HttpServer.
-
+By default, the following items are added to the trace:
+ - meta.type (always "http_request")
+ - request.method
+ - request.path
+ - request.header.<name> (name is the same as the original header name but with dashes replaced with underscores)
+ - response.status
+ - response.body.size
 
 # Usage
 
@@ -44,15 +42,10 @@ fn main() -> std::io::Result<()> {
 }
 ```
 
-Using the above as an example, a few things are worth mentioning:
- - `api` is the metrics namespace
- - `/metrics` will be auto exposed (GET requests only)
+ */
 
-```
-
-*/
 #![deny(missing_docs)]
-#![feature(associated_type_bounds)]
+//#![feature(associated_type_bounds)]
 
 use std::marker::PhantomData;
 use std::sync::Arc;
