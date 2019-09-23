@@ -18,8 +18,12 @@ fn index_post() -> &'static str {
 
 fn main() {
     let mut config = Config::default();
-    config.client_config.options.api_key = env!("HONEYCOMB_API_KEY").to_string();
-    config.client_config.options.dataset = env!("HONEYCOMB_DATASET").to_string();
+    if let Some(api_key) = option_env!("HONEYCOMB_API_KEY") {
+        config.client_config.options.api_key = api_key.to_string();
+    }
+    if let Some(dataset) = option_env!("HONEYCOMB_DATASET") {
+        config.client_config.options.dataset = dataset.to_string();
+    }
     config.service_name = Some("beeline-rocket-simple".to_string());
 
     let client = beeline::init(config);

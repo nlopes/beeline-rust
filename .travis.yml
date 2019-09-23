@@ -4,6 +4,9 @@ rust:
   - beta
   - nightly
 matrix:
+  include:
+    - rust: nightly
+      env: TOOLCHAIN=nightly
   allow_failures:
     - rust: nightly
 cache: cargo
@@ -12,6 +15,8 @@ before_script:
   - rustup component add clippy rustfmt
 
 script:
-  - cargo fmt -- --check
-  - RUST_TEST_THREADS=1 cargo test --verbose # We have to set RUST_TEST_THREADS=1 due to a limitation in the mockito library
-  - cargo clippy --all-targets --all-features -- -D clippy::nursery
+  - cargo fmt --all -- --check
+  - RUST_TEST_THREADS=1 cargo test -p beeline-rust -p beeline-actix-web -- --nocapture # We have to set RUST_TEST_THREADS=1 due to a limitation in the mockito library
+  - ([ "$TOOLCHAIN" = "nightly" ] && RUST_TEST_THREADS=1 cargo test -p beeline-rocket -- --nocapture) || exit 0
+  - cargo clippy -p beeline-rust -p beeline-actix-web --all-targets --all-features -- -D clippy::nursery
+  - ([ "$TOOLCHAIN" = "nightly" ] && cargo clippy -p beeline-rocket --all-targets --all-features -- -D clippy::nursery) || exit 0

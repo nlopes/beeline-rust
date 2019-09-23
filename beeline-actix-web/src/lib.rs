@@ -80,10 +80,7 @@ impl<T: Sender + Clone> BeelineMiddleware<T> {
     /// Build with already started client
     pub fn new(client: Client<T>) -> Self {
         let trace = client.new_trace(None);
-        Self {
-            client,
-            trace,
-        }
+        Self { client, trace }
     }
 
     fn send(

@@ -145,5 +145,4 @@ mod tests {
             Propagation::unmarshal_trace_context(&p.marshal_trace_context())
         );
     }
-
 }
