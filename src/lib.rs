@@ -4,8 +4,8 @@ Please do **not** use in production (yet). I'm still experimenting with the righ
 If you do give this a go and have ideas on library ergonomics please raise an issue with ideas.
 
 */
-
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
@@ -21,10 +21,45 @@ pub use libhoney::{transmission::Transmission, Sender};
 
 pub use trace::{SafeTrace, Trace};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     pub client_config: ClientConfig,
     pub service_name: Option<String>,
+    pub sampler_hook:
+        Arc<dyn Fn(HashMap<String, libhoney::Value>) -> (bool, usize) + 'static + Send + Sync>,
+    pub presend_hook:
+        Arc<Mutex<dyn FnMut(&mut HashMap<String, libhoney::Value>) + 'static + Send + Sync>>,
+}
+
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Config {{\n  client_config: {:?},\n  service_name: {:?},\n  sampler_hook: Fn(),\n}}",
+            self.client_config, self.service_name
+        )
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        fn default_presend_hook(_ev: &mut HashMap<String, libhoney::Value>) {}
+
+        Self {
+            client_config: ClientConfig {
+                options: ClientOptions {
+                    api_key: "api-key-placeholder".to_string(),
+                    dataset: "beeline-rust".to_string(),
+                    sample_rate: 1,
+                    ..libhoney::client::Options::default()
+                },
+                transmission_options: libhoney::transmission::Options::default(),
+            },
+            service_name: None,
+            sampler_hook: Arc::new(|_| (true, 1)),
+            presend_hook: Arc::new(Mutex::new(default_presend_hook)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -74,7 +109,7 @@ where
             .traces
             .lock()
             .insert(trace.lock().trace_id.clone(), trace.clone());
-        trace.clone()
+        trace
     }
 }
 
@@ -135,7 +170,7 @@ mod tests {
     use super::*;
     use crate::trace::TraceSender;
 
-    pub fn new_client() -> Client<TransmissionMock> {
+    pub fn new_client(config: Config) -> Client<TransmissionMock> {
         let api_host = &mockito::server_url();
         let _m = mockito::mock(
             "POST",
@@ -146,25 +181,16 @@ mod tests {
         .with_body("[{ \"status\": 202 }]")
         .create();
 
-        let config = Config {
-            client_config: libhoney::Config {
-                options: libhoney::client::Options {
-                    api_host: api_host.to_string(),
-                    api_key: "key".to_string(),
-                    ..libhoney::client::Options::default()
-                },
-                transmission_options: libhoney::transmission::Options::default(),
-            },
-            service_name: Some("beeline-rust-test".to_string()),
-        };
-
+        let mut config = config;
+        config.client_config.options.api_host = api_host.to_string();
+        config.service_name = Some("beeline-rust-test".to_string());
         crate::test::init(config)
     }
 
     #[test]
     fn test_multiple_threads_with_span() {
-        let client = new_client();
-        let t1_trace = client.new_trace(None).clone();
+        let client = new_client(Config::default());
+        let t1_trace = client.new_trace(None);
         let mut c1_client = client.clone();
         let t1 = std::thread::spawn(move || {
             {
@@ -185,7 +211,7 @@ mod tests {
             t1_trace.send(&mut c1_client);
         });
 
-        let t2_trace = client.new_trace(None).clone();
+        let t2_trace = client.new_trace(None);
         let mut c2_client = client.clone();
         let t2 = std::thread::spawn(move || {
             {
@@ -204,8 +230,8 @@ mod tests {
 
     #[test]
     fn test_multiple_threads() {
-        let client = new_client();
-        let t1_trace = client.new_trace(None).clone();
+        let client = new_client(Config::default());
+        let t1_trace = client.new_trace(None);
         let mut c1_client = client.clone();
         let t1 = std::thread::spawn(move || {
             {
@@ -215,7 +241,7 @@ mod tests {
             t1_trace.send(&mut c1_client);
         });
 
-        let t2_trace = client.new_trace(None).clone();
+        let t2_trace = client.new_trace(None);
         let mut c2_client = client.clone();
         let t2 = std::thread::spawn(move || {
             {

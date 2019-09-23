@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use log::error;
 use parking_lot::Mutex;
-
 use serde_json::json;
 use uuid::Uuid;
 
@@ -236,11 +236,11 @@ impl Span {
         // trace is all getting sent
         if let Some(trace_id) = &self.trace {
             if let Some(trace) = client.get_trace(trace_id.to_string()) {
-                if let Some(ref fields) =
-                    trace.clone().lock().trace_level_fields.clone().as_object()
+                if let Some(fields) =
+                    trace.lock().trace_level_fields.clone().as_object()
                 {
                     for (k, v) in fields.into_iter() {
-                        self.add_field(&k, v.clone());
+                        self.add_field(k, v.clone());
                     }
                 }
             }
@@ -266,12 +266,20 @@ impl Span {
                 self.add_field(&format!("rollup.{}", k), json!(v))
             }
         }
-        let should_keep = true;
+        if let Some(ref mut ev) = self.ev {
+            let sampler_hook = client.0.clone().read().config.sampler_hook.clone();
+            let (should_keep, sample_rate) = sampler_hook(ev.fields());
+            ev.set_sample_rate(sample_rate);
 
-        // TODO: Implement SamplerHook and PresendHook
-        if should_keep {
-            if let Some(ref mut ev) = self.ev {
-                ev.send_presampled(&mut client.0.write().client).unwrap();
+            if should_keep {
+                let presend_hook = client.0.clone().read().config.presend_hook.clone();
+                let presend_hook = &mut *presend_hook.lock();
+                presend_hook(ev.get_fields_mut());
+
+                if let Err(e) = ev.send_presampled(&mut client.0.write().client) {
+                    //dbg!(&e);
+                    error!("Error sending event: {}", e);
+                }
             }
         }
     }
@@ -298,7 +306,7 @@ impl Span {
     pub fn serialize_headers<T: Sender>(&self, client: &mut Client<T>) -> String {
         match &self.trace {
             Some(trace_id) => match client.get_trace(trace_id.to_string()) {
-                Some(trace) => trace.clone().lock().serialize_headers(&self.span_id),
+                Some(trace) => trace.lock().serialize_headers(&self.span_id),
                 None => "".to_string(),
             },
             None => "".to_string(),
@@ -319,7 +327,7 @@ impl Span {
             };
             let new_span = Span {
                 span_id: span_id.clone(),
-                parent_id: self.span_id.clone().to_string(),
+                parent_id: self.span_id.clone(),
                 trace: Some(trace_id.to_string()),
                 ev,
                 is_async,
@@ -329,7 +337,6 @@ impl Span {
             self.children.push(span.clone());
             if let Some(trace) = client.get_trace(trace_id.to_string()) {
                 trace
-                    .clone()
                     .lock()
                     .child_spans
                     .insert(span_id, (*span).lock().clone());
@@ -347,6 +354,7 @@ impl Span {
 pub mod tests {
     use super::*;
     use crate::tests::new_client;
+    use crate::Config;
 
     #[test]
     fn test_new_span() {
@@ -357,8 +365,8 @@ pub mod tests {
 
     #[test]
     fn test_new_trace() {
-        let client = new_client();
-        let cloned = Trace::new(&client, None).clone();
+        let client = new_client(Config::default());
+        let cloned = Trace::new(&client, None);
         let trace = cloned.lock();
         assert!(!trace.trace_id.is_empty());
         assert!(trace.parent_id.is_empty());
@@ -369,9 +377,9 @@ pub mod tests {
 
     #[test]
     fn test_new_trace_with_serialized_headers() {
-        let client = new_client();
+        let client = new_client(Config::default());
         let serialized_headers = "1;trace_id=weofijwoeifj,parent_id=owefjoweifj,context=eyJlcnJvck1zZyI6ImZhaWxlZCB0byBzaWduIG9uIiwidG9SZXRyeSI6dHJ1ZSwidXNlcklEIjoxfQ==".to_string();
-        let cloned = Trace::new(&client, Some(serialized_headers)).clone();
+        let cloned = Trace::new(&client, Some(serialized_headers));
         let trace = cloned.lock();
 
         assert_eq!(trace.trace_id, "weofijwoeifj");
@@ -389,8 +397,8 @@ pub mod tests {
 
     #[test]
     fn test_trace_add_field() {
-        let client = new_client();
-        let cloned = Trace::new(&client, None).clone();
+        let client = new_client(Config::default());
+        let cloned = Trace::new(&client, None);
         let mut trace = cloned.lock();
         assert!(trace.trace_level_fields.is_object());
         trace.add_field("nor", json!({"a": 1}));
@@ -403,8 +411,8 @@ pub mod tests {
     #[test]
     #[allow(clippy::float_cmp)]
     fn test_trace_rollup_fields() {
-        let client = new_client();
-        let cloned = Trace::new(&client, None).clone();
+        let client = new_client(Config::default());
+        let cloned = Trace::new(&client, None);
         let mut trace = cloned.lock();
         trace.add_rollup_field("bignum", 5.0f64);
         trace.add_rollup_field("bignum", 5.0f64);
@@ -416,7 +424,7 @@ pub mod tests {
 
     #[test]
     fn test_send_trace() {
-        let mut client = new_client();
+        let mut client = new_client(Config::default());
         let trace = client.new_trace(None);
         {
             let rs = trace.lock().get_root_span();
@@ -442,5 +450,50 @@ pub mod tests {
         for ev in events {
             dbg!(&ev);
         }
+    }
+
+    #[test]
+    fn test_send_trace_prehook() {
+        let mut config = crate::Config::default();
+
+        // This variable gets set to true within the presend_hook. That way, we can then
+        // test that the presend_hook was in fact run internally.
+        let presend_hook_ran = Arc::new(Mutex::new(false));
+        let presend_hook_ran_inner = presend_hook_ran.clone();
+        config.presend_hook = Arc::new(Mutex::new(
+            move |e: &mut HashMap<String, libhoney::Value>| {
+                let mut ran = presend_hook_ran_inner.lock();
+                *ran = true;
+                e.clear();
+            },
+        ));
+        let mut client = new_client(config);
+
+        let trace = client.new_trace(None);
+        {
+            let rs = trace.lock().get_root_span();
+            let mut rs_guard = rs.lock();
+            rs_guard.add_field("name", Value::String("rs".to_string()));
+        }
+        trace.send(&mut client);
+        assert!(*presend_hook_ran.lock());
+    }
+
+    #[test]
+    fn test_send_trace_sampler_hook() {
+        let mut config = crate::Config::default();
+        config.sampler_hook = Arc::new(|_| (false, 1));
+        let mut client = new_client(config);
+
+        let trace = client.new_trace(None);
+        {
+            let rs = trace.lock().get_root_span();
+            let mut rs_guard = rs.lock();
+            rs_guard.add_field("name", Value::String("rs".to_string()));
+        }
+        trace.send(&mut client);
+        let events = client.0.write().client.transmission.events();
+        // This ends up being true because we set the sampler_hook to drop the event
+        assert!(events.is_empty())
     }
 }

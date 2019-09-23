@@ -1,3 +1,48 @@
+/*! Honeycomb support for Rocket.
+
+By default, the following fields are added to the trace:
+ - `meta.type` (always "http_request")
+ - `request.method`
+ - `request.path`
+ - `request.header.<name>` (name is the same as the original header name but with dashes replaced with underscores)
+   - example: `request.header.content_type`
+ - `response.status`
+ - `response.body.size`
+
+# Usage
+
+First add `beeline_rocket` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+beeline_rocket = "0.1"
+```
+
+You then instantiate the middleware and pass it to `.wrap()`:
+
+```rust
+#[macro_use] use rocket;
+use beeline_rocket::BeelineMiddleware;
+
+#[get("/")]
+fn index() -> &'static str {
+    "Hello, world!"
+}
+
+fn main() {
+    # if false {
+    let client = beeline::init(beeline::Config::default());
+    let middleware = BeelineMiddleware::new_with_client(client);
+    rocket::ignite()
+        .attach(middleware)
+        .mount("/", routes![index])
+        .launch()
+    # }
+}
+```
+
+ */
+
 #![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
@@ -114,17 +159,10 @@ mod tests {
         .with_body("[{ \"status\": 202 }]")
         .create();
 
-        let config = Config {
-            client_config: libhoney::Config {
-                options: libhoney::client::Options {
-                    api_host: api_host.to_string(),
-                    api_key: "key".to_string(),
-                    ..libhoney::client::Options::default()
-                },
-                transmission_options: libhoney::transmission::Options::default(),
-            },
-            service_name: Some("beeline-rocket-test".to_string()),
-        };
+        let mut config = Config::default();
+        config.client_config.options.api_host = api_host.to_string();
+        config.client_config.options.api_key = "key".to_string();
+        config.service_name = Some("beeline-rocket-test".to_string());
 
         beeline::test::init(config)
     }
@@ -150,8 +188,6 @@ mod tests {
 
         let events = beeline_client.0.write().client.transmission.events();
         // 2 because of the original trace + the one we create on every call
-        dbg!(&events);
-        panic!();
         assert_eq!(events.len(), 2);
         let _ = client.get("/").dispatch();
         let events = beeline_client.0.write().client.transmission.events();

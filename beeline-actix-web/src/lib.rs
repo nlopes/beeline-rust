@@ -29,8 +29,9 @@ fn health() -> HttpResponse {
 }
 
 fn main() -> std::io::Result<()> {
-    let beeline = BeelineMiddleware::new_with_client(_client_);
     # if false {
+    let client = beeline::init(beeline::Config::default());
+    let beeline = BeelineMiddleware::new_with_client(client);
     HttpServer::new(move || {
         App::new()
             .wrap(beeline.clone())
@@ -299,17 +300,10 @@ mod tests {
         .with_body("[{ \"status\": 202 }]")
         .create();
 
-        let config = Config {
-            client_config: libhoney::Config {
-                options: libhoney::client::Options {
-                    api_host: api_host.to_string(),
-                    api_key: "key".to_string(),
-                    ..libhoney::client::Options::default()
-                },
-                transmission_options: libhoney::transmission::Options::default(),
-            },
-            service_name: Some("beeline-actix-web-test".to_string()),
-        };
+        let mut config = Config::default();
+        config.client_config.options.api_host = api_host.to_string();
+        config.client_config.options.api_key = "key".to_string();
+        config.service_name = Some("beeline-actix-web-test".to_string());
 
         beeline::test::init(config)
     }

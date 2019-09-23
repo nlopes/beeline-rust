@@ -16,7 +16,7 @@ impl Default for Timer {
 }
 
 impl Timer {
-    fn new(start: Instant) -> Self {
+    const fn new(start: Instant) -> Self {
         Self { start }
     }
 

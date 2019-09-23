@@ -18,18 +18,12 @@ fn index_post() -> &'static str {
 }
 
 fn main() {
-    let client = beeline::init(Config {
-        client_config: ClientConfig {
-            options: ClientOptions {
-                api_key: env!("HONEYCOMB_API_KEY").to_string(),
-                dataset: env!("HONEYCOMB_DATASET").to_string(),
-                ..ClientOptions::default()
-            },
-            transmission_options: TransmissionOptions::default(),
-        },
-        service_name: Some("beeline-rocket-simple".to_string()),
-    });
+    let mut config = Config::default();
+    config.client_config.options.api_key = env!("HONEYCOMB_API_KEY").to_string();
+    config.client_config.options.dataset = env!("HONEYCOMB_DATASET").to_string();
+    config.service_name = Some("beeline-rocket-simple".to_string());
 
+    let client = beeline::init(config);
     let middleware = BeelineMiddleware::new(client);
 
     rocket::ignite()
