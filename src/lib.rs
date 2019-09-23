@@ -3,6 +3,14 @@
 Please do **not** use in production (yet). I'm still experimenting with the right interface to the library so everything can break.
 If you do give this a go and have ideas on library ergonomics please raise an issue with ideas.
 
+Currently there are two different web frameworks supported:
+  - Actix Web
+  - Rocket
+
+You can find more information on their respective READMEs at:
+  - [beeline-actix-web](https://github.com/nlopes/beeline-rust/tree/master/beeline-actix-web)
+  - [beeline-rocket](https://github.com/nlopes/beeline-rust/tree/master/beeline-rocket)
+
 */
 use std::collections::HashMap;
 use std::fmt;
