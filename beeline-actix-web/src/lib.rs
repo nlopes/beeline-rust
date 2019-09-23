@@ -22,6 +22,7 @@ You then instantiate the middleware and pass it to `.wrap()`:
 
 ```rust
 use actix_web::{web, App, HttpResponse, HttpServer};
+use beeline::{init, Config};
 use beeline_actix_web::BeelineMiddleware;
 
 fn health() -> HttpResponse {
@@ -30,8 +31,8 @@ fn health() -> HttpResponse {
 
 fn main() -> std::io::Result<()> {
     # if false {
-    let client = beeline::init(beeline::Config::default());
-    let beeline = BeelineMiddleware::new_with_client(client);
+    let client = init(Config::default());
+    let beeline = BeelineMiddleware::new(client);
     HttpServer::new(move || {
         App::new()
             .wrap(beeline.clone())
@@ -76,22 +77,12 @@ where
 }
 
 impl<T: Sender + Clone> BeelineMiddleware<T> {
-    // /// Start the beeline client
-    // pub fn new(config: beeline::Config) -> Self {
-    //     let client = beeline::init(config);
-    //     let trace = client.new_trace(None);
-    //     BeelineMiddleware {
-    //         client: client,
-    //         trace: trace.clone(),
-    //     }
-    // }
-
     /// Build with already started client
-    pub fn new_with_client(client: Client<T>) -> Self {
+    pub fn new(client: Client<T>) -> Self {
         let trace = client.new_trace(None);
         Self {
             client,
-            trace: trace.clone(),
+            trace,
         }
     }
 
@@ -310,11 +301,11 @@ mod tests {
 
     #[test]
     fn middleware_basic() {
-        let middleware = BeelineMiddleware::new_with_client(new_client());
+        let middleware = BeelineMiddleware::new(new_client());
         let mut app = init_service(
             App::new()
                 .wrap(middleware.clone())
-                .service(web::resource("/").to(|| HttpResponse::Ok().json({}))),
+                .service(web::resource("/").to(|| HttpResponse::Ok().json(()))),
         );
 
         let res = call_service(
@@ -332,11 +323,11 @@ mod tests {
 
     #[test]
     fn middleware_basic_failure() {
-        let middleware = BeelineMiddleware::new_with_client(new_client());
+        let middleware = BeelineMiddleware::new(new_client());
         let mut app = init_service(
             App::new()
                 .wrap(middleware.clone())
-                .service(web::resource("/").to(|| HttpResponse::Ok())),
+                .service(web::resource("/").to(HttpResponse::Ok)),
         );
 
         {

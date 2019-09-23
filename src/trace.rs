@@ -236,9 +236,7 @@ impl Span {
         // trace is all getting sent
         if let Some(trace_id) = &self.trace {
             if let Some(trace) = client.get_trace(trace_id.to_string()) {
-                if let Some(fields) =
-                    trace.lock().trace_level_fields.clone().as_object()
-                {
+                if let Some(fields) = trace.lock().trace_level_fields.clone().as_object() {
                     for (k, v) in fields.into_iter() {
                         self.add_field(k, v.clone());
                     }
@@ -277,7 +275,6 @@ impl Span {
                 presend_hook(ev.get_fields_mut());
 
                 if let Err(e) = ev.send_presampled(&mut client.0.write().client) {
-                    //dbg!(&e);
                     error!("Error sending event: {}", e);
                 }
             }
@@ -447,9 +444,6 @@ pub mod tests {
         trace.send(&mut client);
         let events = client.0.write().client.transmission.events();
         assert_eq!(events.len(), 3);
-        for ev in events {
-            dbg!(&ev);
-        }
     }
 
     #[test]

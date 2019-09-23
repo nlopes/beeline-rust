@@ -3,8 +3,7 @@
 #[macro_use]
 extern crate rocket;
 
-use beeline::{ClientConfig, ClientOptions, Config, TransmissionOptions};
-
+use beeline::Config;
 use beeline_rocket::BeelineMiddleware;
 
 #[get("/")]

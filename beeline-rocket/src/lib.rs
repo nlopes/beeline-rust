@@ -21,7 +21,12 @@ beeline_rocket = "0.1"
 You then instantiate the middleware and pass it to `.wrap()`:
 
 ```rust
-#[macro_use] use rocket;
+#![feature(proc_macro_hygiene, decl_macro)]
+
+#[macro_use]
+extern crate rocket;
+
+use beeline::{init, Config};
 use beeline_rocket::BeelineMiddleware;
 
 #[get("/")]
@@ -31,12 +36,12 @@ fn index() -> &'static str {
 
 fn main() {
     # if false {
-    let client = beeline::init(beeline::Config::default());
-    let middleware = BeelineMiddleware::new_with_client(client);
+    let client = init(Config::default());
+    let middleware = BeelineMiddleware::new(client);
     rocket::ignite()
         .attach(middleware)
         .mount("/", routes![index])
-        .launch()
+        .launch();
     # }
 }
 ```
