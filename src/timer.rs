@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 pub(crate) trait Timing {
-    fn finish(&self) -> u128;
+    fn finish(&self) -> f64;
 }
 
 #[derive(Debug, Clone)]
@@ -28,8 +28,8 @@ impl Timer {
 }
 
 impl Timing for Timer {
-    fn finish(&self) -> u128 {
-        self.start.elapsed().as_millis()
+    fn finish(&self) -> f64 {
+        self.start.elapsed().as_nanos() as f64 / 1_000_000f64
     }
 }
 
@@ -43,8 +43,8 @@ mod tests {
         let now = Instant::now();
         if let Some(start) = now.checked_sub(Duration::from_secs(3600)) {
             let t = Timer::new(start);
-            assert!(t.finish() > 3_599_000);
-            assert!(t.finish() < 3_600_001);
+            assert!(t.finish() > 3_599_000f64);
+            assert!(t.finish() < 3_600_001f64);
         } else {
             panic!("Could not adjust start time");
         }
@@ -54,6 +54,6 @@ mod tests {
     fn test_start() {
         let t = Timer::start();
         let elapsed = t.finish();
-        assert!(elapsed < 1000);
+        assert!(elapsed < 1000f64);
     }
 }

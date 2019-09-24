@@ -189,7 +189,7 @@ impl Span {
         }
 
         // finish the timer for this span
-        self.add_field("duration_ms", json!(self.timer.finish() as u64)); // TODO: dangerous
+        self.add_field("duration_ms", json!(self.timer.finish())); // TODO: dangerous
 
         if !self.parent_id.is_empty() {
             self.add_field("trace.parent_id", json!(self.parent_id.clone()));
