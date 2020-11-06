@@ -144,8 +144,11 @@ fn internal_config<T: Sender>(config: Config, client: &mut libhoney::Client<T>) 
         client.add_field("meta.service_name", libhoney::Value::String(svc));
     }
 
-    if let Some(hostname) = hostname::get_hostname() {
-        client.add_field("meta.local_hostname", libhoney::Value::String(hostname));
+    if let Ok(hostname) = hostname::get() {
+        client.add_field(
+            "meta.local_hostname",
+            libhoney::Value::String(hostname.into_string().unwrap_or(String::from("unknown"))),
+        );
     }
 }
 
