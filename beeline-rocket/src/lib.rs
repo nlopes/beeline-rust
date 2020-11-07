@@ -50,9 +50,6 @@ fn main() {
 
 #![feature(proc_macro_hygiene, decl_macro)]
 
-#[macro_use]
-extern crate rocket;
-
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::{Data, Request, Response, Rocket};
 use serde_json::{json, Value};
@@ -97,7 +94,7 @@ where
 
     fn on_request(&self, request: &mut Request, _: &Data) {
         let mut client = self.client.clone();
-        let trace = client.new_trace(None).clone();
+        let trace = client.new_trace(None);
         let rs = trace.lock().get_root_span();
         let child = rs.lock().create_child(&mut client);
         if let Some(span) = child.clone() {
@@ -172,7 +169,7 @@ mod tests {
         beeline::test::init(config)
     }
 
-    #[get("/")]
+    #[rocket::get("/")]
     fn index() -> &'static str {
         "Hello, world!"
     }
@@ -181,7 +178,7 @@ mod tests {
         let middleware = BeelineMiddleware::new(client);
         rocket::ignite()
             .attach(middleware)
-            .mount("/", routes![index])
+            .mount("/", rocket::routes![index])
     }
 
     #[test]

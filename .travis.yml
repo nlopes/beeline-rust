@@ -16,7 +16,7 @@ before_script:
 
 script:
   - cargo fmt --all -- --check
-  - RUST_TEST_THREADS=1 cargo test -p beeline-rust -p beeline-actix-web -- --nocapture # We have to set RUST_TEST_THREADS=1 due to a limitation in the mockito library
-  - ([ "$TOOLCHAIN" = "nightly" ] && RUST_TEST_THREADS=1 cargo test -p beeline-rocket -- --nocapture) || exit 0
+  - cargo test -p beeline-rust -p beeline-actix-web -- --nocapture
+  - ([ "$TOOLCHAIN" = "nightly" ] && cargo test -p beeline-rocket -- --nocapture) || exit 0
   - cargo clippy -p beeline-rust -p beeline-actix-web --all-targets --all-features -- -D clippy::nursery
   - ([ "$TOOLCHAIN" = "nightly" ] && cargo clippy -p beeline-rocket --all-targets --all-features -- -D clippy::nursery) || exit 0

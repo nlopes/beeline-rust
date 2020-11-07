@@ -13,11 +13,11 @@
 ///  context=${contextBlob} - contextBlob is a base64 encoded json object.
 ///
 /// ex: X-Honeycomb-Trace: 1;trace_id=weofijwoeifj,parent_id=owefjoweifj,context=SGVsbG8gV29ybGQ=
-use base64;
-use serde_json::json;
-
+use crate::errors::{BeelineError, Result};
 use libhoney::Value;
 
+// TODO(nlopes): once we add http propagation we should remove this allow
+#[allow(dead_code)]
 const PROPAGATION_HTTP_HEADER: &str = "X-Honeycomb-Trace";
 const PROPAGATION_VERSION: usize = 1;
 
@@ -37,22 +37,19 @@ pub struct Propagation {
 }
 
 impl Propagation {
-    pub fn unmarshal_trace_context(header: &str) -> Self {
+    pub fn unmarshal_trace_context(header: &str) -> Result<Self> {
         let ver: Vec<&str> = header.splitn(2, ';').collect();
         if ver[0] == "1" {
             return Propagation::unmarshal_trace_context_v1(ver[1]);
         }
 
-        // TODO: this should be an error
-        Self {
-            trace_id: "".to_string(),
-            parent_id: "".to_string(),
-            dataset: "".to_string(),
-            trace_context: json!({}),
-        }
+        Err(BeelineError::PropagationError(format!(
+            "unrecognized version for trace header {}",
+            ver[0]
+        )))
     }
 
-    fn unmarshal_trace_context_v1(header: &str) -> Self {
+    fn unmarshal_trace_context_v1(header: &str) -> Result<Self> {
         let clauses: Vec<&str> = header.split(',').collect();
         let (mut trace_id, mut parent_id, mut dataset, mut context) = (
             "".to_string(),
@@ -73,20 +70,29 @@ impl Propagation {
         }
 
         if trace_id.is_empty() && !parent_id.is_empty() {
-            // TODO: return error
-            unimplemented!()
+            return Err(BeelineError::PropagationError(String::from(
+                "parent_id without trace_id",
+            )));
         }
 
-        Propagation {
+        Ok(Propagation {
             trace_id,
             parent_id,
             dataset,
-            trace_context: serde_json::from_slice(&base64::decode(&context).unwrap()).unwrap(),
-        }
+            trace_context: serde_json::from_slice(&base64::decode(&context).map_err(|e| {
+                BeelineError::PropagationError(format!(
+                    "unable to decode base64 trace context: {}",
+                    e
+                ))
+            })?)
+            .map_err(|e| {
+                BeelineError::PropagationError(format!("unable to unmarshal trace context: {}", e))
+            })?,
+        })
     }
 
     pub fn marshal_trace_context(&self) -> String {
-        let dataset = if self.dataset != "" {
+        let dataset = if !self.dataset.is_empty() {
             format!("dataset={},", self.dataset)
         } else {
             String::new()
@@ -142,7 +148,7 @@ mod tests {
         };
         assert_eq!(
             p,
-            Propagation::unmarshal_trace_context(&p.marshal_trace_context())
+            Propagation::unmarshal_trace_context(&p.marshal_trace_context()).unwrap()
         );
     }
 }

@@ -18,10 +18,10 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 
+mod errors;
 mod propagation;
 mod timer;
 pub mod trace;
-
 pub use libhoney::client::Options as ClientOptions;
 pub use libhoney::transmission::Options as TransmissionOptions;
 pub use libhoney::Config as ClientConfig;
@@ -29,14 +29,17 @@ pub use libhoney::{transmission::Transmission, Sender};
 
 pub use trace::{SafeTrace, Trace};
 
+type SamplerHookFn =
+    dyn Fn(HashMap<String, libhoney::Value>) -> (bool, usize) + 'static + Send + Sync;
+
+type PresendHookFn = dyn FnMut(&mut HashMap<String, libhoney::Value>) + 'static + Send + Sync;
+
 #[derive(Clone)]
 pub struct Config {
     pub client_config: ClientConfig,
     pub service_name: Option<String>,
-    pub sampler_hook:
-        Arc<dyn Fn(HashMap<String, libhoney::Value>) -> (bool, usize) + 'static + Send + Sync>,
-    pub presend_hook:
-        Arc<Mutex<dyn FnMut(&mut HashMap<String, libhoney::Value>) + 'static + Send + Sync>>,
+    pub sampler_hook: Arc<SamplerHookFn>,
+    pub presend_hook: Arc<Mutex<PresendHookFn>>,
 }
 
 impl fmt::Debug for Config {
@@ -147,7 +150,11 @@ fn internal_config<T: Sender>(config: Config, client: &mut libhoney::Client<T>) 
     if let Ok(hostname) = hostname::get() {
         client.add_field(
             "meta.local_hostname",
-            libhoney::Value::String(hostname.into_string().unwrap_or(String::from("unknown"))),
+            libhoney::Value::String(
+                hostname
+                    .into_string()
+                    .unwrap_or_else(|_| String::from("unknown")),
+            ),
         );
     }
 }
@@ -176,7 +183,6 @@ pub mod test {
 #[cfg(test)]
 mod tests {
     use libhoney::mock::TransmissionMock;
-    use mockito;
 
     use super::*;
     use crate::trace::TraceSender;

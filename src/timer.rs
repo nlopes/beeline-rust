@@ -16,6 +16,7 @@ impl Default for Timer {
 }
 
 impl Timer {
+    #[cfg(test)]
     const fn new(start: Instant) -> Self {
         Self { start }
     }

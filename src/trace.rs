@@ -69,12 +69,12 @@ impl Trace {
         let mut t = cloned.lock();
 
         if let Some(headers) = serialized_headers {
-            let prop = Propagation::unmarshal_trace_context(&headers);
-            // TODO: check for error and info error do the below:
-            t.trace_id = prop.trace_id;
-            t.parent_id = prop.parent_id;
-            t.builder.options.dataset = prop.dataset;
-            t.trace_level_fields = prop.trace_context;
+            if let Ok(prop) = Propagation::unmarshal_trace_context(&headers) {
+                t.trace_id = prop.trace_id;
+                t.parent_id = prop.parent_id;
+                t.builder.options.dataset = prop.dataset;
+                t.trace_level_fields = prop.trace_context;
+            }
         }
 
         if t.trace_id.is_empty() {
@@ -120,7 +120,7 @@ impl Trace {
 
     /// `add_rollup_field` is here to let a span contribute a field to the trace while
     /// keeping the trace's locks private.
-    fn add_rollup_field(&mut self, key: &str, value: f64) {
+    pub fn add_rollup_field(&mut self, key: &str, value: f64) {
         let v = self.rollup_fields.entry(key.to_string()).or_insert(0f64);
         *v += value;
     }
@@ -475,8 +475,11 @@ pub mod tests {
 
     #[test]
     fn test_send_trace_sampler_hook() {
-        let mut config = crate::Config::default();
-        config.sampler_hook = Arc::new(|_| (false, 1));
+        let config = crate::Config {
+            sampler_hook: Arc::new(|_| (false, 1)),
+            ..Default::default()
+        };
+
         let mut client = new_client(config);
 
         let trace = client.new_trace(None);

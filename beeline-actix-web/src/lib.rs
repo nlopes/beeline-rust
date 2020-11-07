@@ -288,7 +288,6 @@ mod tests {
     use actix_web::{web, App, HttpResponse};
     use beeline::{Client, Config};
     use libhoney::mock::TransmissionMock;
-    use mockito;
 
     use super::*;
 
