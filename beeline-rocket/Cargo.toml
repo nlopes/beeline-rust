@@ -21,7 +21,7 @@ path = "src/lib.rs"
 travis-ci = { repository = "nlopes/beeline-rust", branch = "master" }
 
 [dependencies]
-rocket = "=0.4.2"
+rocket = "=0.4.5"
 beeline-rust = { path = "../" }
 serde_json = "=1.0.59"
 
