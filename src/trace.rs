@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use futures::executor::block_on;
 use log::error;
 use parking_lot::Mutex;
 use serde_json::json;
@@ -274,7 +275,7 @@ impl Span {
                 let presend_hook = &mut *presend_hook.lock();
                 presend_hook(ev.get_fields_mut());
 
-                if let Err(e) = ev.send_presampled(&mut client.0.write().client) {
+                if let Err(e) = block_on(ev.send_presampled(&mut client.0.write().client)) {
                     error!("Error sending event: {}", e);
                 }
             }
@@ -419,8 +420,8 @@ pub mod tests {
         assert_eq!(trace.rollup_fields["smallnum"], 0.1f64);
     }
 
-    #[test]
-    fn test_send_trace() {
+    #[actix_rt::test]
+    async fn test_send_trace() {
         let mut client = new_client(Config::default());
         let trace = client.new_trace(None);
         {
@@ -442,7 +443,7 @@ pub mod tests {
                 .add_field("name", Value::String("not_sent_child".to_string()));
         }
         trace.send(&mut client);
-        let events = client.0.write().client.transmission.events();
+        let events = client.0.write().client.transmission.events().await;
         assert_eq!(events.len(), 3);
     }
 
@@ -473,8 +474,8 @@ pub mod tests {
         assert!(*presend_hook_ran.lock());
     }
 
-    #[test]
-    fn test_send_trace_sampler_hook() {
+    #[actix_rt::test]
+    async fn test_send_trace_sampler_hook() {
         let config = crate::Config {
             sampler_hook: Arc::new(|_| (false, 1)),
             ..Default::default()
@@ -489,7 +490,7 @@ pub mod tests {
             rs_guard.add_field("name", Value::String("rs".to_string()));
         }
         trace.send(&mut client);
-        let events = client.0.write().client.transmission.events();
+        let events = client.0.write().client.transmission.events().await;
         // This ends up being true because we set the sampler_hook to drop the event
         assert!(events.is_empty())
     }

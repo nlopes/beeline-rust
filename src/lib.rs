@@ -56,8 +56,17 @@ impl Default for Config {
     fn default() -> Self {
         fn default_presend_hook(_ev: &mut HashMap<String, libhoney::Value>) {}
 
+        #[cfg(feature = "async_std_executor")]
+        let executor = async_executors::AsyncStd;
+
+        #[cfg(feature = "tokio_executor")]
+        let executor = async_executors::TokioTpBuilder::new()
+            .build()
+            .expect("requires a tokio threadpool");
+
         Self {
             client_config: ClientConfig {
+                executor: Arc::new(executor),
                 options: ClientOptions {
                     api_key: "api-key-placeholder".to_string(),
                     dataset: "beeline-rust".to_string(),
@@ -76,7 +85,7 @@ impl Default for Config {
 #[derive(Debug, Clone)]
 pub struct Client<T: Sender>(pub Arc<RwLock<BeelineClient<T>>>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BeelineClient<T: Sender> {
     pub config: Config,
     pub client: libhoney::Client<T>,
@@ -124,17 +133,20 @@ where
     }
 }
 
-pub fn init(config: Config) -> Client<Transmission> {
+// TODO(nlopes): errors are not public
+use libhoney::Error;
+
+pub fn init(config: Config) -> Result<Client<Transmission>, Error> {
     let cfg = config.clone();
-    let mut client: libhoney::client::Client<Transmission> = libhoney::init(cfg.client_config);
+    let mut client: libhoney::client::Client<Transmission> = libhoney::init(cfg.client_config)?;
 
     internal_config::<Transmission>(config.clone(), &mut client);
 
-    Client(Arc::new(RwLock::new(BeelineClient {
+    Ok(Client(Arc::new(RwLock::new(BeelineClient {
         config,
         client,
         traces: Arc::new(Mutex::new(HashMap::new())),
-    })))
+    }))))
 }
 
 fn internal_config<T: Sender>(config: Config, client: &mut libhoney::Client<T>) {
@@ -159,30 +171,33 @@ fn internal_config<T: Sender>(config: Config, client: &mut libhoney::Client<T>) 
     }
 }
 
+#[cfg(test)]
 pub mod test {
-    pub use libhoney::mock::TransmissionMock;
+    pub use libhoney::test::mock::TransmissionMock;
+    pub use libhoney::test::Result;
 
     use crate::{Client, Config};
 
     use super::*;
 
-    pub fn init(config: Config) -> Client<TransmissionMock> {
+    pub fn init(config: Config) -> Result<Client<TransmissionMock>> {
         let cfg = config.clone();
-        let mut client = libhoney::test::init(cfg.client_config);
+        let mut client = libhoney::test::init(cfg.client_config)?;
 
         internal_config::<TransmissionMock>(config.clone(), &mut client);
 
-        Client(Arc::new(RwLock::new(BeelineClient {
+        Ok(Client(Arc::new(RwLock::new(BeelineClient {
             config,
             client,
             traces: Arc::new(Mutex::new(HashMap::new())),
-        })))
+        }))))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use libhoney::mock::TransmissionMock;
+    use libhoney::test::mock::TransmissionMock;
+    use libhoney::test::Result;
 
     use super::*;
     use crate::trace::TraceSender;
@@ -201,14 +216,14 @@ mod tests {
         let mut config = config;
         config.client_config.options.api_host = api_host.to_string();
         config.service_name = Some("beeline-rust-test".to_string());
-        crate::test::init(config)
+        crate::test::init(config).unwrap()
     }
 
-    #[test]
-    fn test_multiple_threads_with_span() {
-        let client = new_client(Config::default());
+    #[actix_rt::test]
+    async fn test_multiple_threads_with_span() {
+        let mut client = new_client(Config::default());
         let t1_trace = client.new_trace(None);
-        let mut c1_client = client.clone();
+        //let mut c1_client = client.clone();
         let t1 = std::thread::spawn(move || {
             {
                 let rs = t1_trace.lock().get_root_span();
@@ -216,62 +231,62 @@ mod tests {
                     let mut trace = t1_trace.lock();
                     trace.add_field("thread", serde_json::Value::String("one".to_string()));
                 }
-                let mut span_client = c1_client.clone();
+                //let mut span_client = c1_client.clone();
                 let mut root_span_guard = rs.lock();
-                if let Some(new_span) = root_span_guard.create_child(&mut span_client) {
+                if let Some(new_span) = root_span_guard.create_child(&mut client) {
                     let mut new_span_guard = new_span.lock();
                     new_span_guard
                         .add_field("span", serde_json::Value::String("span_one".to_string()));
-                    new_span_guard.send(&mut span_client);
+                    new_span_guard.send(&mut client);
                 }
             }
-            t1_trace.send(&mut c1_client);
+            t1_trace.send(&mut client);
         });
 
         let t2_trace = client.new_trace(None);
-        let mut c2_client = client.clone();
+        //let mut c2_client = client.clone();
         let t2 = std::thread::spawn(move || {
             {
                 let mut trace = t2_trace.lock();
                 trace.add_field("thread", serde_json::Value::String("two".to_string()));
             }
-            t2_trace.send(&mut c2_client);
+            t2_trace.send(&mut client);
         });
 
         t1.join().unwrap();
         t2.join().unwrap();
 
-        let events = client.0.write().client.transmission.events();
+        let events = client.0.write().client.transmission.events().await;
         assert_eq!(events.len(), 3);
     }
 
-    #[test]
-    fn test_multiple_threads() {
-        let client = new_client(Config::default());
+    #[actix_rt::test]
+    async fn test_multiple_threads() {
+        let mut client = new_client(Config::default());
         let t1_trace = client.new_trace(None);
-        let mut c1_client = client.clone();
+        //let mut c1_client = client.clone();
         let t1 = std::thread::spawn(move || {
             {
                 let mut trace = t1_trace.lock();
                 trace.add_field("thread", serde_json::Value::String("one".to_string()));
             }
-            t1_trace.send(&mut c1_client);
+            t1_trace.send(&mut client);
         });
 
         let t2_trace = client.new_trace(None);
-        let mut c2_client = client.clone();
+        //let mut c2_client = client.clone();
         let t2 = std::thread::spawn(move || {
             {
                 let mut trace = t2_trace.lock();
                 trace.add_field("thread", serde_json::Value::String("two".to_string()));
             }
-            t2_trace.send(&mut c2_client);
+            t2_trace.send(&mut client);
         });
 
         t1.join().unwrap();
         t2.join().unwrap();
 
-        let events = client.0.write().client.transmission.events();
+        let events = client.0.write().client.transmission.events().await;
         assert_eq!(events.len(), 2);
     }
 }

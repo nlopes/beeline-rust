@@ -26,15 +26,23 @@ members = [
   "beeline-rocket",
 ]
 
+[features]
+default = ["async_std_executor"]
+async_std_executor = ["async_executors/async_std"]
+tokio_executor = ["async_executors/tokio"]
+
 [dependencies]
-base64 = "=0.13.0"
-hostname = "=0.3.1"
-libhoney-rust = "=0.1.4"
-log = "=0.4.8"
+async_executors = { version = "=0.4", default-features = false }
+base64 = "=0.13"
+hostname = "=0.3"
+futures = "=0.3"
+libhoney-rust = { path = "../libhoney-rust" }
+log = "=0.4"
 parking_lot = "=0.11"
-serde_json = "=1.0.59"
+serde_json = "=1.0.64"
 thiserror = "=1.0.22"
-uuid = { version = "=0.8.1", features = ["v4"]}
+uuid = { version = "=0.8", features = ["v4"]}
 
 [dev-dependencies]
-mockito = "=0.28.0"
+mockito = "=0.29"
+actix-rt = "=2.2"
